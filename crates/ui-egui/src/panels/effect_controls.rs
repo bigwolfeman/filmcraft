@@ -1280,7 +1280,7 @@ mod lane_tests {
         let mut app = crate::FilmcraftApp::new(s);
         let ctx = context();
         for duration in [0, -5 * filmcraft_time::TICKS_PER_SECOND] {
-            let project = std::sync::Arc::make_mut(&mut app.session.project);
+            let project = app.session.project_mut();
             project.sequence_mut(seq).unwrap().find_item_mut(clip).unwrap().1.duration = Tick(duration);
             let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(700.0, 500.0));
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
@@ -1372,7 +1372,7 @@ mod graph_drag_tests {
             session.execute("file.openDemoProject", json!({})).unwrap();
             let seq = session.state.active_sequence.unwrap();
             let clip = session.active_sequence().unwrap().video_tracks[0].items[0].id;
-            let it = std::sync::Arc::make_mut(&mut session.project).sequence_mut(seq).unwrap().find_item_mut(clip).unwrap().1;
+            let it = session.project_mut().sequence_mut(seq).unwrap().find_item_mut(clip).unwrap().1;
             let mut a = Keyframe::new(it.source_in + Tick(it.duration.0 / 4), from.clone());
             let mut b = Keyframe::new(it.source_in + Tick(it.duration.0 * 3 / 4), to);
             a.interp = Interpolation::Bezier;

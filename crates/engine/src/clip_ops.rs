@@ -825,16 +825,16 @@ fn close_project(s: &mut Session, p: &Value) -> Result<Value> {
     if s.is_dirty() && !bool_p(p, "force").unwrap_or(false) {
         return Err(EngineError::Other("the project has unsaved changes: save it first, or pass {\"force\": true} to discard them".into()));
     }
-    s.project = std::sync::Arc::new(Project::new("Untitled"));
+    s.set_project(std::sync::Arc::new(Project::new("Untitled")));
     s.history = Default::default();
     s.history.limit = 200;
     s.state = Session::default().state;
     if s.path.take().is_some() {
         s.previews.reset_temp();
     }
-    s.revision += 1;
+    let hooks = s.hooks.clone();
+    hooks.with_cause(craft_command::Cause::Load, || s.bump());
     s.saved_revision = s.revision;
-    s.events.push(crate::Event::ProjectChanged { revision: s.revision });
     Ok(json!({"closed": true}))
 }
 

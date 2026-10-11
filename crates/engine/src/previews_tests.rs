@@ -27,7 +27,7 @@ fn session_with(name: &str, video: Generator) -> (Session, ClipId) {
     let mut s = Session::default();
     s.previews.set_dir(Some(tmp(name)));
     let r = FrameRate::FPS_24;
-    let mut p = (*s.project).clone();
+    let mut p = (**s.project).clone();
     let matte = crate::demo::add_generator(&mut p, &s.media, GeneratorSource::new(video, 64, 36, r, Tick(10 * TICKS_PER_SECOND)), "Matte", Label::Iris, None);
     let tone = crate::demo::add_generator(
         &mut p,
@@ -49,7 +49,7 @@ fn session_with(name: &str, video: Generator) -> (Session, ClipId) {
     let q = p.sequence_mut(seq).unwrap();
     q.video_tracks[0].items = vec![a, b];
     q.audio_tracks[0].items = vec![au];
-    s.project = Arc::new(p);
+    s.set_project(Arc::new(p));
     s.state.active_sequence = Some(seq);
     s.state.open_sequences = vec![seq];
     (s, a_id)

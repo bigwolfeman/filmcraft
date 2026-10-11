@@ -154,7 +154,7 @@ fn slide_moves_linked_audio_with_the_video() {
 #[test]
 fn sequence_parameters_are_bounded_and_failed_changes_are_atomic() {
     let mut s = demo();
-    let before = (*s.project).clone();
+    let before = (**s.project).clone();
     let history = s.history.undo.len();
     for command in ["file.newSequence", "sequence.settings"] {
         for params in [
@@ -172,13 +172,13 @@ fn sequence_parameters_are_bounded_and_failed_changes_are_atomic() {
             json!({"sampleRate":384001}),
         ] {
             assert!(s.execute(command, params.clone()).is_err(), "{command} {params}");
-            assert_eq!(*s.project, before);
+            assert_eq!(**s.project, before);
             assert_eq!(s.history.undo.len(), history);
         }
     }
     for params in [json!({"video":u64::MAX}), json!({"audio":u64::MAX}), json!({"video":257}), json!({"audio":-1})] {
         assert!(s.execute("file.newSequence", params.clone()).is_err(), "{params}");
-        assert_eq!(*s.project, before);
+        assert_eq!(**s.project, before);
     }
     s.execute("file.newSequence", json!({"width":7680,"height":4320,"video":0,"audio":0})).unwrap();
     assert_eq!(s.active_sequence().unwrap().settings.width, 7680, "standard 8K remains supported");
@@ -207,7 +207,7 @@ fn first_motion(s: &Session) -> (u64, (f64, f64), f64) {
 #[test]
 fn sequence_settings_scales_motion_with_the_frame_size_in_one_undo_step() {
     let mut s = demo();
-    let before = (*s.project).clone();
+    let before = (**s.project).clone();
     let (id, p0, s0) = first_motion(&s);
     assert_eq!((s.active_sequence().unwrap().settings.width, s.active_sequence().unwrap().settings.height), (1920, 1080));
     let r = s.execute("sequence.settings", json!({"width":1280,"height":720,"scaleMotion":true})).unwrap();
@@ -216,11 +216,11 @@ fn sequence_settings_scales_motion_with_the_frame_size_in_one_undo_step() {
     assert_eq!(id1, id);
     assert!((p1.0 - p0.0 * 2.0 / 3.0).abs() < 1e-9 && (p1.1 - p0.1 * 2.0 / 3.0).abs() < 1e-9, "{p0:?} -> {p1:?}");
     assert!((s1 - s0 * 2.0 / 3.0).abs() < 1e-9, "{s0} -> {s1}");
-    let after = (*s.project).clone();
+    let after = (**s.project).clone();
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(*s.project, before, "size and Motion come back in one undo step");
+    assert_eq!(**s.project, before, "size and Motion come back in one undo step");
     s.execute("edit.redo", json!({})).unwrap();
-    assert_eq!(*s.project, after);
+    assert_eq!(**s.project, after);
     // without the option the frame size changes alone (the command's default, as before)
     let r = s.execute("sequence.settings", json!({"width":3840,"height":2160})).unwrap();
     assert_eq!(r["scaledClips"], json!(0));
@@ -238,11 +238,11 @@ fn sequence_settings_timecode_render_quality_and_colour() {
     s.execute("sequence.settings", json!({"dropFrame":false})).unwrap();
     assert!(!s.active_sequence().unwrap().settings.drop_frame);
     // drop-frame only exists for the NTSC rates; a refused change leaves everything as it was
-    let before = (*s.project).clone();
+    let before = (**s.project).clone();
     let history = s.history.undo.len();
     for params in [json!({"fps":25,"dropFrame":true}), json!({"workingSpace":"rec2020-log"}), json!({"fps":25,"dropFrame":true,"width":1280})] {
         assert!(s.execute("sequence.settings", params.clone()).is_err(), "{params}");
-        assert_eq!(*s.project, before, "{params}");
+        assert_eq!(**s.project, before, "{params}");
         assert_eq!(s.history.undo.len(), history);
     }
     s.execute("sequence.settings", json!({"workingSpace":"rec2100-pq","wideGamut":true,"autoToneMap":true})).unwrap();
@@ -578,7 +578,7 @@ fn save_and_open_roundtrip() {
     assert!(!s.is_dirty());
     let mut t = Session::default();
     t.execute("file.open", json!({"path": path})).unwrap();
-    assert_eq!(*t.project, *s.project);
+    assert_eq!(**t.project, **s.project);
     // media re-created from generator refs
     assert!(t.render_program(0.1).is_some());
     std::fs::remove_dir_all(dir).ok();
@@ -777,7 +777,7 @@ fn empty_items_do_not_panic_keyframe_commands() {
     let mut s = demo();
     let seq = s.state.active_sequence.unwrap();
     let clip = {
-        let item = &mut std::sync::Arc::make_mut(&mut s.project).sequence_mut(seq).unwrap().video_tracks[0].items[0];
+        let item = &mut s.project_mut().sequence_mut(seq).unwrap().video_tracks[0].items[0];
         item.duration = Tick::ZERO;
         item.id
     };
@@ -846,13 +846,13 @@ fn transitions_select_and_delete() {
     assert!(s.state.selection.is_empty(), "selecting a transition replaces the clip selection");
     assert!(s.execute("timeline.select", json!({"transitions": [987_654]})).is_err(), "unknown ids are refused");
     assert!(s.execute("edit.rippleDelete", json!({})).is_err(), "Ripple Delete needs clips");
-    let before = (*s.project).clone();
+    let before = (**s.project).clone();
     s.execute("edit.clear", json!({})).unwrap();
     assert!(!transition_ids(&s).contains(&tid), "Delete removes the selected transition");
     assert_eq!(s.active_sequence().unwrap().all_tracks().map(|t| t.items.len()).sum::<usize>(), clips, "and leaves the clips");
     assert!(s.state.transition_selection.is_empty());
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(*s.project, before, "one undo step");
+    assert_eq!(**s.project, before, "one undo step");
     // selecting clips clears a transition selection
     s.execute("timeline.select", json!({"transitions": [tid]})).unwrap();
     s.execute("timeline.select", json!({"clips": [some_clip]})).unwrap();
@@ -897,7 +897,7 @@ fn transition_duration_alignment_and_position() {
     let r = set(&mut s, json!({"start": (cut - f(4)).0, "duration": f(10).0})).unwrap();
     assert_eq!((r["start"].as_i64(), r["duration"].as_i64()), (Some((cut - f(4)).0), Some(f(10).0)));
     // refused, and nothing changes
-    let before = (*s.project).clone();
+    let before = (**s.project).clone();
     let history = s.history.undo.len();
     for p in [
         json!({"frames": 0}),
@@ -911,7 +911,7 @@ fn transition_duration_alignment_and_position() {
         json!({"start": (cut + f(1)).0, "duration": f(1).0}),
     ] {
         assert!(set(&mut s, p.clone()).is_err(), "{p}");
-        assert_eq!(*s.project, before, "{p}");
+        assert_eq!(**s.project, before, "{p}");
         assert_eq!(s.history.undo.len(), history, "{p}");
     }
     assert!(s.execute("sequence.setTransition", json!({"transition": 987_654, "frames": 5})).is_err());
@@ -922,7 +922,7 @@ fn transition_duration_alignment_and_position() {
     }
     assert_eq!(s.history.undo.len(), history + 1);
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(*s.project, before);
+    assert_eq!(**s.project, before);
 }
 
 /// #484: Enable flips each selected clip on its own, as in Premiere. With one enabled and one

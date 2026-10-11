@@ -634,7 +634,7 @@ fn save_as_template(s: &mut Session, p: &Value) -> Result<Value> {
             dir.join(format!("{}.fcproj", sanitize(&name))).to_string_lossy().to_string()
         }
     };
-    let mut proj = (*s.project).clone();
+    let mut proj = (**s.project).clone();
     proj.name = name.clone();
     proj.root.name = name.clone();
     s.services.write_file(&path, &filmcraft_format::encode(&proj, false)).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
@@ -674,7 +674,7 @@ fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
     let name = str_p(p, "name").unwrap_or("Untitled").to_string();
     proj.name = name.clone();
     proj.root.name = name;
-    s.project = std::sync::Arc::new(proj);
+    s.set_project(std::sync::Arc::new(proj));
     s.history = Default::default();
     s.history.limit = 200;
     s.state = Session::default().state;
@@ -684,9 +684,9 @@ fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
         s.previews.reset_temp();
     }
     s.media.clear();
-    s.revision += 1;
+    let hooks = s.hooks.clone();
+    hooks.with_cause(craft_command::Cause::Load, || s.bump());
     s.saved_revision = s.revision;
-    s.events.push(crate::Event::ProjectChanged { revision: s.revision });
     if let Some(q) = s.state.active_sequence {
         s.events.push(crate::Event::OpenSequence(q));
     }

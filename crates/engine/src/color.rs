@@ -451,7 +451,7 @@ fn apply_match(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let base = it.effects[idx].clone();
     // the current shot as Lumetri sees it: the clip with its Lumetri switched off
-    let mut probe = (*s.project).clone();
+    let mut probe = (**s.project).clone();
     if let Some((_, pi)) = probe.sequence_mut(seq_id).and_then(|q| q.find_item_mut(clip)) {
         pi.effects[idx].enabled = false;
     }

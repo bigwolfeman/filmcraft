@@ -16,24 +16,11 @@ use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session};
 
-type Run = fn(&mut Session, &Value) -> Result<Value>;
-type Enabled = fn(&Session) -> std::result::Result<(), String>;
+pub type Run = fn(&mut Session, &Value) -> Result<Value>;
+pub type Enabled = fn(&Session) -> std::result::Result<(), String>;
 
-/// Metadata + implementation for one command.
-pub struct CommandSpec {
-    pub id: &'static str,
-    pub label: &'static str,
-    /// Menu placement, e.g. `["Sequence"]` or `["File", "New"]`. Empty = not in menus.
-    pub menu: &'static [&'static str],
-    /// Default shortcut (egui-style names, `Cmd` = ⌘ on macOS / Ctrl elsewhere).
-    pub shortcut: Option<&'static str>,
-    /// Parameter description (JSON-ish, for agents and the MCP schema).
-    pub params: &'static str,
-    pub enabled: Enabled,
-    pub run: Run,
-    /// Record in the journal (false for pure queries).
-    pub journal: bool,
-}
+/// Built-in command row. `enabled` is `fn(&Session)`. Named params are applied in `Session::enabled_for`.
+pub type CommandSpec = craft_command::CommandSpec<Session, EngineError>;
 
 macro_rules! cmd {
     ($id:literal, $label:literal, [$($m:literal),*], $sc:expr, $params:literal, $en:expr, $run:expr) => {
@@ -843,30 +830,30 @@ fn build() -> Vec<CommandSpec> {
         // ================= File =================
         cmd!("file.newProject", "Project…", ["File", "New"], Some("Cmd+Alt+N"), r#"{"name":str}"#, always, |s, p| {
             let name = str_p(p, "name").unwrap_or("Untitled").to_string();
-            s.project = std::sync::Arc::new(filmcraft_project::Project::new(&name));
+            s.set_project(std::sync::Arc::new(filmcraft_project::Project::new(&name)));
             s.history = Default::default();
             s.history.limit = 200;
             s.state = crate::Session::default().state;
             if s.path.take().is_some() {
                 s.previews.reset_temp();
             }
-            s.revision += 1;
+            let hooks = s.hooks.clone();
+            hooks.with_cause(craft_command::Cause::Load, || s.bump());
             s.saved_revision = s.revision;
-            s.events.push(crate::Event::ProjectChanged { revision: s.revision });
             Ok(Value::Null)
         }),
         cmd!("file.openDemoProject", "Demo Project", ["File", "New"], None, "{}", always, |s, _| {
             let (p, seq) = crate::demo::demo_project(&s.media);
-            s.project = std::sync::Arc::new(p);
+            s.set_project(std::sync::Arc::new(p));
             s.history = Default::default();
             s.history.limit = 200;
             s.state = crate::Session::default().state;
             s.state.active_sequence = Some(seq);
             s.state.open_sequences = vec![seq];
             s.state.playheads.insert(seq, FrameRate::FPS_23_976.tick_of(4 * 24 + 6));
-            s.revision += 1;
+            let hooks = s.hooks.clone();
+            hooks.with_cause(craft_command::Cause::Load, || s.bump());
             s.saved_revision = s.revision;
-            s.events.push(crate::Event::ProjectChanged { revision: s.revision });
             s.events.push(crate::Event::OpenSequence(seq));
             Ok(json!({"sequence": seq.0}))
         }),
@@ -2900,15 +2887,35 @@ fn build() -> Vec<CommandSpec> {
         }),
         // ================= Queries =================
         query!("command.list", "List Commands", "{}", |s, _| {
-            Ok(Value::Array(
-                command_specs()
-                    .iter()
-                    .map(|c| {
-                        let all: Vec<&str> = s.shortcuts.for_command(c.id).iter().map(|b| b.keys.as_str()).collect();
-                        json!({"id": c.id, "label": c.label, "menu": c.menu, "shortcut": s.shortcuts.primary(c.id), "shortcuts": all, "defaultShortcut": c.shortcut, "params": c.params, "enabled": (c.enabled)(s).is_ok()})
+            // Copy the rows first. `for_each` borrows the registry, and enablement
+            // resolves the same registry again.
+            let mut rows = Vec::new();
+            s.registry.for_each(|view| {
+                let menu = match view.menu {
+                    craft_command::Menu::Static(path) => path.iter().map(|part| (*part).to_string()).collect::<Vec<_>>(),
+                    craft_command::Menu::Shared(path) => path.iter().map(|part| part.to_string()).collect(),
+                };
+                rows.push((view.id.to_string(), view.label.to_string(), menu, view.shortcut.map(str::to_string), view.params.to_string()));
+            });
+            let out = rows
+                .into_iter()
+                .map(|(id, label, menu, default_shortcut, params)| {
+                    let all: Vec<&str> = s.shortcuts.for_command(&id).iter().map(|b| b.keys.as_str()).collect();
+                    let schema = s.registry.schema(&id).map(|value| (*value).clone());
+                    json!({
+                        "id": id,
+                        "label": label,
+                        "menu": menu,
+                        "shortcut": s.shortcuts.primary(&id),
+                        "shortcuts": all,
+                        "defaultShortcut": default_shortcut,
+                        "params": params,
+                        "enabled": s.is_enabled(&id),
+                        "schema": schema,
                     })
-                    .collect(),
-            ))
+                })
+                .collect();
+            Ok(Value::Array(out))
         }),
         query!("project.inspect", "Inspect Project", "{}", |s, _| Ok(crate::commands::inspect_project(s))),
         query!("sequence.inspect", "Inspect Sequence", r#"{"item":id?}"#, |s, p| {
@@ -3818,7 +3825,7 @@ fn write_project(s: &mut Session, path: &str, adopt: bool) -> Result<Value> {
         && let Some(name) = project_name_for(path)
         && s.project.name != name
     {
-        name_project(std::sync::Arc::make_mut(&mut s.project), name);
+        name_project(s.project_mut(), name);
     }
     // what is open (sequence tabs, how each is shown) goes into the file beside the project
     let view = s.project_view();
@@ -3856,7 +3863,7 @@ fn install_project(s: &mut Session, proj: filmcraft_project::Project, path: Opti
     s.media.set_use_proxies(proxies);
     s.offline = Default::default();
     let first = proj.sequences().next().map(|i| i.id);
-    s.project = std::sync::Arc::new(proj);
+    s.set_project(std::sync::Arc::new(proj));
     s.history = Default::default();
     s.history.limit = 200;
     s.state = crate::Session::default().state;
@@ -3868,11 +3875,11 @@ fn install_project(s: &mut Session, proj: filmcraft_project::Project, path: Opti
         s.previews.set_dir(Some(crate::project_tools::previews_dir_for(&s.project, p)));
     }
     s.path = path;
-    s.revision += 1;
+    let hooks = s.hooks.clone();
+    hooks.with_cause(craft_command::Cause::Load, || s.bump());
     // A recovered project is unsaved: its saved revision is one that never existed.
     s.saved_revision = if clean { s.revision } else { 0 };
     s.loaded_schema = filmcraft_format::SCHEMA_VERSION;
-    s.events.push(crate::Event::ProjectChanged { revision: s.revision });
 }
 
 fn open_project(s: &mut Session, path: &str) -> Result<Value> {

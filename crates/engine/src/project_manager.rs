@@ -109,7 +109,7 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
     let project_path = dest_dir.join(format!("{name}.fcproj")).to_string_lossy().into_owned();
 
     // ---- the new project
-    let mut proj = (*s.project).clone();
+    let mut proj = (**s.project).clone();
     if exclude_unused {
         let keep: BTreeSet<ItemId> = proj
             .items

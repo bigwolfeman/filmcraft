@@ -507,8 +507,7 @@ mod tests {
         assert_eq!(app.session.prefs.general.interface_language, "zh-cn");
         assert!(crate::menus::menu_items(&app).iter().any(|it| it.id == "app.language.chinese" && it.checked == Some(true)));
         let prefs = serde_json::to_string(&app.session.prefs).unwrap();
-        let mut restarted = filmcraft_engine::Session::default();
-        restarted.prefs = serde_json::from_str(&prefs).unwrap();
+        let restarted = filmcraft_engine::Session { prefs: serde_json::from_str(&prefs).unwrap(), ..filmcraft_engine::Session::default() };
         assert_eq!(crate::FilmcraftApp::new(restarted).ui.language, Language::ZhCn);
         crate::menus::invoke(&mut app, &ctx, "app.language.english", serde_json::json!({})).unwrap();
         set_current(Language::En);
@@ -730,7 +729,7 @@ mod tests {
         }
         // every command (Keyboard Shortcuts dialog, History panel) and the shortcut contexts
         let app = crate::FilmcraftApp::new(filmcraft_engine::Session::default());
-        for c in app.session.shortcuts.commands() {
+        for c in app.session.shortcuts.commands(&app.session.registry) {
             push(&mut out, &c.label);
             push(&mut out, &c.category);
         }
@@ -774,8 +773,7 @@ mod tests {
         crate::menus::invoke(&mut app, &ctx, "app.language.spanish", serde_json::json!({})).unwrap();
         assert_eq!(app.ui.language, Language::Es);
         let prefs = serde_json::to_string(&app.session.prefs).unwrap();
-        let mut restarted = filmcraft_engine::Session::default();
-        restarted.prefs = serde_json::from_str(&prefs).unwrap();
+        let restarted = filmcraft_engine::Session { prefs: serde_json::from_str(&prefs).unwrap(), ..filmcraft_engine::Session::default() };
         assert_eq!(crate::FilmcraftApp::new(restarted).ui.language, Language::Es);
         assert!(crate::menus::menu_items(&app).iter().any(|it| it.id == "app.language.spanish" && it.checked == Some(true)));
         crate::menus::invoke(&mut app, &ctx, "app.language.portuguese", serde_json::json!({})).unwrap();
@@ -794,8 +792,7 @@ mod tests {
         assert_eq!(restored.language, Language::Uk);
         assert_eq!(app.session.prefs.general.interface_language, "uk");
         let prefs = serde_json::to_string(&app.session.prefs).unwrap();
-        let mut restarted = filmcraft_engine::Session::default();
-        restarted.prefs = serde_json::from_str(&prefs).unwrap();
+        let restarted = filmcraft_engine::Session { prefs: serde_json::from_str(&prefs).unwrap(), ..filmcraft_engine::Session::default() };
         assert_eq!(crate::FilmcraftApp::new(restarted).ui.language, Language::Uk);
         let result = crate::menus::invoke(&mut app, &ctx, "app.language.german", serde_json::json!({})).unwrap();
         assert_eq!(result, serde_json::json!("de"));
@@ -814,8 +811,7 @@ mod tests {
         let restored: crate::state::UiState = serde_json::from_str(&saved).unwrap();
         assert_eq!(restored.language, Language::De);
         let prefs = serde_json::to_string(&app.session.prefs).unwrap();
-        let mut restarted = filmcraft_engine::Session::default();
-        restarted.prefs = serde_json::from_str(&prefs).unwrap();
+        let restarted = filmcraft_engine::Session { prefs: serde_json::from_str(&prefs).unwrap(), ..filmcraft_engine::Session::default() };
         assert_eq!(crate::FilmcraftApp::new(restarted).ui.language, Language::De);
         let result = crate::menus::invoke(&mut app, &ctx, "app.language.french", serde_json::json!({})).unwrap();
         assert_eq!(result, serde_json::json!("fr"));
@@ -831,8 +827,7 @@ mod tests {
         let saved = serde_json::to_string(&app.ui).unwrap();
         assert!(saved.contains("\"language\":\"fr\""), "{saved}");
         let prefs = serde_json::to_string(&app.session.prefs).unwrap();
-        let mut restarted = filmcraft_engine::Session::default();
-        restarted.prefs = serde_json::from_str(&prefs).unwrap();
+        let restarted = filmcraft_engine::Session { prefs: serde_json::from_str(&prefs).unwrap(), ..filmcraft_engine::Session::default() };
         assert_eq!(crate::FilmcraftApp::new(restarted).ui.language, Language::Fr);
         crate::menus::invoke(&mut app, &ctx, "app.language.english", serde_json::json!({})).unwrap();
         assert_eq!(app.ui.language, Language::En);

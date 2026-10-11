@@ -53,7 +53,7 @@ fn move_takes_linked_partners_along() {
     assert_eq!(r["moved"], json!([v.id.0, a.id.0]));
     s.active_sequence().unwrap().check().unwrap();
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(*s.project, *before, "one undo step restores both clips");
+    assert_eq!(**s.project, *before, "one undo step restores both clips");
     s.execute("edit.redo", json!({})).unwrap();
     assert_eq!((state(&s, v.id).1, state(&s, a.id).1), (to, a.start + (to - v.start)));
     s.execute("edit.undo", json!({})).unwrap();
@@ -75,7 +75,7 @@ fn move_takes_linked_partners_along() {
     s.execute("timeline.move", json!({"moves": [{"clip": v.id.0, "track": "V1", "time": to.0}]})).unwrap();
     assert_eq!((state(&s, v.id), state(&s, a.id)), ((v_track, to), (a_track, a.start)));
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(*s.project, *before);
+    assert_eq!(**s.project, *before);
     // ...unless the command asks for it
     s.execute("timeline.move", json!({"moves": [{"clip": a.id.0, "track": a_track.0, "time": ta.0}], "linked": true})).unwrap();
     assert_eq!((state(&s, v.id), state(&s, a.id)), ((v_track, tv), (a_track, ta)), "moving the sound takes the picture along");
@@ -97,7 +97,7 @@ fn a_linked_partner_on_a_locked_track_stays_and_the_listed_clip_still_moves() {
     // a listed clip whose own destination is locked is still refused, and nothing moves
     let before = s.project.clone();
     assert!(s.execute("timeline.move", json!({"moves": [{"clip": a.id.0, "track": a_track.0, "time": to.0}]})).is_err());
-    assert_eq!(*s.project, *before);
+    assert_eq!(**s.project, *before);
 }
 
 /// A partner that would land where it already is does not move: re-placing it would drop the
@@ -180,7 +180,7 @@ fn hostile_times_are_refused_or_clamped_never_a_panic() {
         for time in [i64::MAX, i64::MAX - 1, Tick::MAX.0 + 1] {
             let e = s.execute("timeline.move", json!({"moves": [{"clip": v.id.0, "track": v_track.0, "time": time}], "linked": linked})).unwrap_err();
             assert!(matches!(&e, EngineError::BadParams { cmd, .. } if cmd == "timeline.move"), "{time} linked={linked}: {e:?}");
-            assert_eq!(*s.project, *before, "{time}: nothing moved");
+            assert_eq!(**s.project, *before, "{time}: nothing moved");
         }
         // far before the start: the clip lands at zero, as a small negative time does
         for time in [i64::MIN, i64::MIN + 1, -1] {
@@ -200,7 +200,7 @@ fn hostile_times_are_refused_or_clamped_never_a_panic() {
         assert!(matches!(s.execute("timeline.move", json!({"moves": moves})), Err(EngineError::BadParams { .. })), "{moves}");
     }
     assert!(s.execute("timeline.move", json!({"moves": [{"clip": 987_654_321u64, "track": v_track.0, "time": 0}]})).is_err(), "a clip that does not exist");
-    assert_eq!(*s.project, *before);
+    assert_eq!(**s.project, *before);
 }
 
 /// Moving one narration line onto a spot another line still held shortened that line and said
@@ -269,7 +269,7 @@ fn copy_leaves_the_originals_and_links_the_copies() {
     assert_eq!(s.state.selection, copies, "the copies are selected");
     q.check().unwrap();
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(*s.project, *before, "one undo step");
+    assert_eq!(**s.project, *before, "one undo step");
     // copying just one side (linked: false) leaves the copy unlinked
     let r = s.execute("timeline.move", json!({"moves": [{"clip": a.id.0, "track": a_track.0, "time": to.0}], "copy": true, "linked": false})).unwrap();
     let c = ClipId(r["copied"][0].as_u64().unwrap());

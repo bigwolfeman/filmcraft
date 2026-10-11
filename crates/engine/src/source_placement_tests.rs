@@ -69,7 +69,7 @@ fn invalid_stream_choices_and_locked_destinations_do_not_mutate_project() {
         assert_eq!(s.project.to_json(), before);
     }
     let id = s.state.active_sequence.unwrap();
-    std::sync::Arc::make_mut(&mut s.project).sequence_mut(id).unwrap().audio_tracks[0].locked = true;
+    s.project_mut().sequence_mut(id).unwrap().audio_tracks[0].locked = true;
     let locked = s.project.to_json();
     assert!(s.execute("timeline.place", json!({"item":5,"track":"V1","audioTrack":"A1","time":0,"video":true,"audio":true})).is_err());
     assert_eq!(s.project.to_json(), locked);

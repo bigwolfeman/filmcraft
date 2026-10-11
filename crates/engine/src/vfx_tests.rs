@@ -39,7 +39,8 @@ fn transition_preview_is_read_only_and_matches_apply_and_undo() {
         }
         assert!(preview_transition(&s, &json!({"effect": effect, "clip": u64::MAX}), kind).is_err());
         let track = s.active_sequence().unwrap().tracks(kind)[0].id;
-        std::sync::Arc::make_mut(&mut s.project).sequence_mut(s.state.active_sequence.unwrap()).unwrap().track_mut(track).unwrap().locked = true;
+        let seq = s.state.active_sequence.unwrap();
+        s.project_mut().sequence_mut(seq).unwrap().track_mut(track).unwrap().locked = true;
         assert!(preview_transition(&s, &json!({"effect": effect, "clip": s.active_sequence().unwrap().track(track).unwrap().items[0].id.0}), kind).is_err());
     }
 }

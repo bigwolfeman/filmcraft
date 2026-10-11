@@ -218,7 +218,7 @@ fn custom_presets_persist_export_and_import() {
 #[test]
 fn list_searches_labels_and_keys() {
     let s = Session::default();
-    let r = s.shortcuts.commands();
+    let r = s.shortcuts.commands(&s.registry);
     assert!(r.iter().any(|c| c.id == "trim.forward"));
     assert!(!r.iter().any(|c| c.id == "timeline.move"), "commands with required params are not bindable");
     // a parameter doc holds parameters only (each optional or with a default): a result

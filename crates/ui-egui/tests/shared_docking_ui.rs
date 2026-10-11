@@ -58,8 +58,7 @@ fn builtin_and_legacy_workspace_shapes_roundtrip_and_save_floating() {
     }
     let dir = std::env::temp_dir().join(format!("filmcraft-shared-dock-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let mut session = Session::default();
-    session.prefs_path = Some(dir.join("preferences.json"));
+    let session = Session { prefs_path: Some(dir.join("preferences.json")), ..Session::default() };
     let mut app = FilmcraftApp::new(session);
     let ctx = egui::Context::default();
     app.ui.dock = layout().root;
@@ -69,8 +68,7 @@ fn builtin_and_legacy_workspace_shapes_roundtrip_and_save_floating() {
     let restored = dock::saved_docking(&prefs, "Floating test");
     assert_eq!(restored.floating, app.ui.floating);
     assert_eq!(restored.root, app.ui.dock);
-    let mut restarted_session = Session::default();
-    restarted_session.prefs_path = Some(dir.join("preferences.json"));
+    let restarted_session = Session { prefs_path: Some(dir.join("preferences.json")), ..Session::default() };
     let restarted = FilmcraftApp::new(restarted_session);
     let mut h = Harness::builder().with_size(vec2(1200.0, 760.0)).build_eframe(move |_| restarted);
     for _ in 0..4 {
@@ -441,7 +439,7 @@ fn narration_selection_reveals_covered_floating_tts_once_without_editing_the_pro
         pace: 1.2,
         speech_duration: filmcraft_time::Tick::ZERO,
     };
-    std::sync::Arc::make_mut(&mut session.project).narrations.insert(clip.item, narration.clone());
+    session.project_mut().narrations.insert(clip.item, narration.clone());
     let project = session.project.clone();
     let mut app = FilmcraftApp::new(session);
     app.show_panel(PanelKind::TextToSpeech);

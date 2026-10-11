@@ -50,7 +50,7 @@ fn clicking_between_two_clips_selects_the_gap_and_delete_closes_it() {
     s.active_sequence().unwrap().check().unwrap();
 
     assert_eq!(s.undo().as_deref(), Some("Ripple Delete"), "one undo step");
-    assert_eq!(*s.project, *before);
+    assert_eq!(**s.project, *before);
 }
 
 #[test]

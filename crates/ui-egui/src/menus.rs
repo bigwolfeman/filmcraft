@@ -174,7 +174,29 @@ pub fn targets_source(app: &FilmcraftApp, params: &Value) -> bool {
 }
 
 /// Execute a UI or engine command by id.
-pub fn invoke(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut params: Value) -> Result<Value, String> {
+pub fn invoke(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: Value) -> Result<Value, String> {
+    // Engine ids are gated inside `Session::execute`. This gate is only for ids execute does not resolve.
+    if app.session.registry.resolve(id).is_none() {
+        let gate = app.session.open_ui(id, &params)?;
+        let params = gate.params.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| invoke_body(app, ctx, id, params)));
+        match result {
+            Ok(value) => {
+                let outcome = if value.is_ok() { filmcraft_engine::UiOutcome::Ok } else { filmcraft_engine::UiOutcome::Err };
+                app.session.close_ui(gate, outcome);
+                value
+            }
+            Err(payload) => {
+                app.session.close_ui(gate, filmcraft_engine::UiOutcome::Panicked);
+                std::panic::resume_unwind(payload)
+            }
+        }
+    } else {
+        invoke_body(app, ctx, id, params)
+    }
+}
+
+fn invoke_body(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut params: Value) -> Result<Value, String> {
     if filmcraft_engine::source_monitor::source_command(id) && targets_source(app, &params) && params.get("target").is_none() {
         let object = params.as_object_mut().ok_or("command parameters must be an object")?;
         object.insert("target".into(), json!("source"));
@@ -660,23 +682,13 @@ pub fn default_menu_items() -> Vec<MenuItem> {
 /// Menu entries with their live shortcuts and enablement.
 pub fn menu_items_for(session: &filmcraft_engine::Session) -> Vec<MenuItem> {
     let mut out = Vec::new();
-    for c in filmcraft_engine::command_specs() {
-        if c.menu.is_empty() {
-            continue;
-        }
+    for (id, label, path) in session.menu_command_rows() {
         // Edit ▸ Label items carry the names from Settings ▸ Labels
-        let label = match c.id.strip_prefix("edit.label.").and_then(filmcraft_project::Label::from_name) {
+        let label = match id.strip_prefix("edit.label.").and_then(filmcraft_project::Label::from_name) {
             Some(l) => session.prefs.labels.name(l),
-            None => c.label.into(),
+            None => label,
         };
-        out.push(MenuItem {
-            id: c.id.into(),
-            label,
-            path: c.menu.iter().map(|s| s.to_string()).collect(),
-            shortcut: session.shortcuts.primary(c.id),
-            enabled: session.is_enabled(c.id),
-            checked: None,
-        });
+        out.push(MenuItem { id: id.clone(), label, path, shortcut: session.shortcuts.primary(&id), enabled: session.is_enabled(&id), checked: None });
     }
     for c in UI_COMMANDS.iter().chain(crate::panels::keyboard::COMMANDS) {
         if c.menu.is_empty() {

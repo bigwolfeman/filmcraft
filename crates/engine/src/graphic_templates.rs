@@ -955,7 +955,7 @@ pub fn sync_source_graphics(s: &mut Session) {
     if s.project.source_graphics.is_empty() {
         return;
     }
-    let p = Arc::make_mut(&mut s.project);
+    let p = s.project_mut();
     let items: Vec<ItemId> = p.source_graphics.keys().copied().collect();
     for item in items {
         let master = p.source_graphics[&item].clone();
@@ -1034,7 +1034,7 @@ pub fn fonts_used(s: &Session) -> Vec<(String, String, usize)> {
         Some(x) => x.2 += 1,
         None => v.push((fam, st, 1)),
     };
-    let mut p = (*s.project).clone();
+    let mut p = (**s.project).clone();
     for_each_layer(&mut p, |e| {
         let (fam, st) = (text_of(e, "font"), text_of(e, "font_style"));
         add(if fam.is_empty() { "Inter".into() } else { fam.clone() }, if st.is_empty() { "Regular".into() } else { st.clone() });
